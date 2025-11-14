@@ -1,3 +1,6 @@
+/* https://github.com/cubeee/world-recolor/tree/master */
+/* stolen from here */
+
 package me.tenai;
 
 import java.math.*;

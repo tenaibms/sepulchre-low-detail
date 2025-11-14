@@ -4,7 +4,7 @@ import me.tenai.SepulchreLowDetailPlugin;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class ExamplePluginTest
+public class SepulchreLowDetailTest
 {
 	public static void main(String[] args) throws Exception
 	{
