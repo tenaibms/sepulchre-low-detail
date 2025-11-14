@@ -1,5 +1,6 @@
-package com.example;
+package me.tenai;
 
+import me.tenai.SepulchreLowDetailPlugin;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
@@ -7,7 +8,7 @@ public class ExamplePluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
-		ExternalPluginManager.loadBuiltin(ExamplePlugin.class);
+		ExternalPluginManager.loadBuiltin(SepulchreLowDetailPlugin.class);
 		RuneLite.main(args);
 	}
 }
