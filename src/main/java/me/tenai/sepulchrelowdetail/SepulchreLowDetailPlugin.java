@@ -1,24 +1,19 @@
-package me.tenai;
+package me.tenai.sepulchrelowdetail;
 
 import com.google.inject.Provides;
 import javax.inject.Inject;
-import javax.swing.SwingUtilities;
 
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.GameObject;
 import net.runelite.api.GameState;
-import net.runelite.api.SceneTileModel;
 import net.runelite.api.SceneTilePaint;
 import net.runelite.api.Tile;
-import net.runelite.api.WorldView;
 import net.runelite.api.events.PreMapLoad;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
-import net.runelite.client.input.MouseManager;
-import net.runelite.client.input.MouseListener;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
 
@@ -38,9 +33,6 @@ public class SepulchreLowDetailPlugin extends Plugin
 
 	@Inject
 	private SepulchreLowDetailConfig config;
-	
-	@Inject
-	private MouseManager mouseManager;
 	
 	@Inject
 	private ClientThread clientThread;
@@ -75,15 +67,12 @@ public class SepulchreLowDetailPlugin extends Plugin
 	private final HashSet<Short> overlay_color = new HashSet<Short>(Set.of(
 		(short)359,
 		(short)361,
-		(short)37,
 		(short)362,
-		(short)178,
-		(short)57,		
 		(short)143
 	));
 				
 	private final HashMap<Integer, Integer> floor_regions = new HashMap<Integer, Integer>(Map.of(
-		9565, 0, /* lobby */
+		//9565, 0, /* lobby */
 		9053, 1,
 		10077, 2,
 		9563, 3,
@@ -93,7 +82,11 @@ public class SepulchreLowDetailPlugin extends Plugin
 
 	private final HashSet<Integer> game_object_blacklist = new HashSet<Integer>(Set.of(
 		38427 /* don't shade the flames from the flamethrowers, only the flamethrowers themselves */
-	));	
+	));
+	
+	private final HashSet<Integer> ground_objects_to_hide = new HashSet<Integer>(Set.of(
+		38140,21087,39090,39532,39531,37624,16457,38153,38159,16432,33635,16408,38142,38141,38145,38136,38129,38137,38133,38135,38143,38146,38148,38131,38147,38391,38389,38390,38138,33616,33641,38144,38132,38150,38149,38139,33623,38163,38151,38168,38167,38164,38386,38388,38387,38162,38161,38169,38170,38155,38154,38165,38172,38171,38185,38191,38192,38197,38246,38240,38252,38253,38247,38248,38202,38201,38245,38244,38198,38190,38189,38188,38254,38250,38199,38396,38395,38397,38187,38194,38200,38205,38206,38520,38195,38196,38222,38221,38217,38211,38220,38229,38226,38230,38394,38392,38393,38225,38213,38212,38209,38216,38218,38215,21804,38134,38223,38219,38204,33643,16400,33615,38203,38207,38208,38251,16399,16425,38193,38665,38666,38650,38652,38659,38227,38228,38662,38661,38663,38660,38653,38242,38236,38655,38235,38234,38233,38232,38231,38291,38293,38295,38285,38296,38283,38294,38297,38300,38299,21949,16409,38405,38406,38407,38289,38290,38287,16456,38307,38324,38319,38323,38321,38320,38309,38318,38317,38316,16394,38328,38327,38312,38313,38314,38329,38330,38402,38403,38404,38322,38343,38347,38344,38346,38339,38333,38351,38331,38350,38342,38341,38383,38385,38384,38352,38353,38337,38334,38338,38399,38398,38400,38345,38335,38121,38122,38126,38125,38127,38123,38128,38111,38119,38120,38118,38622,38621,38158,38157,38160,38156,38214
+	));
 
 	int[] regions;
 	
@@ -101,18 +94,31 @@ public class SepulchreLowDetailPlugin extends Plugin
 	
 	Tile[][][] tiles;
 	short[][][] overlays;
+	int[][][] lightness;
+	int[][][] blended_lightness;
+	int[][][] object_counts;
+	
+	HashMap<Integer, Integer> floor_colors;
+	int current_floor;
+	
+	private void reloadMap() {
+		clientThread.invokeLater(() -> {
+			if (client.getGameState() == GameState.LOGGED_IN) {
+				client.setGameState(GameState.LOADING);
+			}
+		});
+	}
 	
 	@Override
 	protected void startUp() throws Exception
 	{
-//		mouseManager.registerMouseListener(mouseListener);
-		log.info("Old Low Detail started!");
+		log.info("Sepulchre Low Detail started!");
 	}
 
 	@Override
 	protected void shutDown() throws Exception
 	{
-		log.info("Old Low Detail stopped!");
+		log.info("Sepulchre Low Detail stopped!");
 	}
 	
 	private int ShadeColor(int color) {
@@ -126,17 +132,14 @@ public class SepulchreLowDetailPlugin extends Plugin
 		return Colors.packJagexHsl(hue, saturation, lightness);
 	}
 	
-	private int findFloor(int[] regions) {
-		var current_floor = -1;
+	private void findFloor(int[] regions) {
+		current_floor = -1;
 		for(var region : regions) {
 			if(floor_regions.containsKey(region)) { current_floor = floor_regions.get(region); log.info("Current Floor: {}", current_floor); }
 		}
-		return current_floor;
 	}
 	
-	private int[][][] findObjectCounts() {
-		var objectCounts = new int[zSize][ySize][xSize];
-
+	private void findObjectCounts() {
 		for (var i = 0; i < zSize; i++) {
 		    for (var j = 0; j < xSize; j++) {
 		        for (var k = 0; k < ySize; k++) {
@@ -148,15 +151,13 @@ public class SepulchreLowDetailPlugin extends Plugin
 		                		count++;
 		                	}
 		                }
-		                objectCounts[i][j][k] = count;
+		                object_counts[i][j][k] = count;
 		            } else {
-		                objectCounts[i][j][k] = 0;
+		                object_counts[i][j][k] = 0;
 		            }
 		        }
 		    }
-		}
-		
-		return objectCounts;
+		}		
 	}
 	
 	private boolean isTileValid(int plane, int x, int y) {
@@ -171,43 +172,7 @@ public class SepulchreLowDetailPlugin extends Plugin
         return overlay_color.contains(overlays[plane][x][y]); /* lastly, check if the tile has a valid overlay, otherwise invalid */
 	}
 	
-	private void paintTile(Tile tile, int color) {
-    	SceneTilePaint paint = tile.getSceneTilePaint();       
-		paint.setNeColor(color);
-		paint.setNwColor(color);
-		paint.setSeColor(color);
-		paint.setSwColor(color);
-	}
-	
-	@Subscribe
-	public void onPreMapLoad(PreMapLoad event) {		
-		regions = event.getScene().getMapRegions();
-
-		tiles = event.getScene().getExtendedTiles();
-		overlays = event.getScene().getOverlayIds();
-		
-		zSize = tiles.length;
-		xSize = tiles[0].length;
-		ySize = tiles[0][0].length;
-				
-		var floor_colors = new HashMap<Integer, Integer>(Map.of(
-			0, Colors.packJagexHsl(config.floor12hue(), config.floor12saturation(), config.floor12brightness()),
-			1, Colors.packJagexHsl(config.floor12hue(), config.floor12saturation(), config.floor12brightness()),
-			2, Colors.packJagexHsl(config.floor12hue(), config.floor12saturation(), config.floor12brightness()),
-			3, Colors.packJagexHsl(config.floor34hue(), config.floor34saturation(), config.floor34brightness()),
-			4, Colors.packJagexHsl(config.floor34hue(), config.floor34saturation(), config.floor34brightness()),
-			5, Colors.packJagexHsl(config.floor5hue(), config.floor5saturation(), config.floor5brightness())
-		));
-		
-		var current_floor = findFloor(regions);
-		if (current_floor == -1) return; /* don't run when no sepulchre regions are loaded */
-		
-		var object_counts = findObjectCounts();
-		
-		int[][][] lightness = new int[zSize][xSize][ySize];
-		int[][][] blended_lightness = new int[zSize][xSize][ySize];
-
-		
+	private void setLightnessArray() {
 		int color = floor_colors.get(current_floor);
 		int color_shaded = ShadeColor(color);
 		
@@ -229,9 +194,11 @@ public class SepulchreLowDetailPlugin extends Plugin
 				}
 			}
 		}
-				
+	}
+	
+	private void blendLightnessArray() {
 		int blend_radius = config.blendRadius();
-		
+
 		/* blend tiles in lightness array */
 		for(int i = 0; i < tiles.length; ++i) {
 			for(int j = 0; j < tiles[i].length; ++j) {
@@ -242,7 +209,7 @@ public class SepulchreLowDetailPlugin extends Plugin
                 		
                 		for(int bx = -blend_radius; bx <= blend_radius; ++bx) {
                     		for(int by = -blend_radius; by <= blend_radius; ++by) {
-                    			if (j + bx < 0 || j + bx >= tiles[i].length || k + by < 0 || k + by > tiles[i][j].length) continue;
+                    			if (j + bx < 0 || j + bx > tiles[i].length || k + by < 0 || k + by > tiles[i][j].length) continue;
                     			if(isTileValid(i, j + bx, k + by)) {
                     				++count;
                         			
@@ -257,7 +224,9 @@ public class SepulchreLowDetailPlugin extends Plugin
 				}
 			}
 		}
-				
+	}
+
+	private void paintTiles() {
 		/* paint tiles */
 		for(int i = 0; i < tiles.length; ++i) {
 			for(int j = 0; j < tiles[i].length; ++j) {
@@ -331,15 +300,59 @@ public class SepulchreLowDetailPlugin extends Plugin
 		}
 	}
 	
+	private void hideGroundObjects() {
+		/* hides ground objects */		
+		for (int i = 0; i < tiles.length; ++i) {
+			for (int j = 0; j < tiles[i].length; ++j) {
+				for (int k = 0; k < tiles[i][j].length; ++k) {
+            		if(tiles[i][j][k] != null && tiles[i][j][k].getGroundObject() != null && ground_objects_to_hide.contains(tiles[i][j][k].getGroundObject().getId()) ) {
+            			tiles[i][j][k].setGroundObject(null);
+            		}
+				}
+			}
+		}
+	}
+	
+	@Subscribe
+	public void onPreMapLoad(PreMapLoad event) {		
+		regions = event.getScene().getMapRegions();
+
+		tiles = event.getScene().getExtendedTiles();
+		overlays = event.getScene().getOverlayIds();
+		
+		zSize = tiles.length;
+		xSize = tiles[0].length;
+		ySize = tiles[0][0].length;
+		
+		object_counts = new int[zSize][xSize][ySize];
+		
+		lightness = new int[zSize][xSize][ySize];
+		blended_lightness = new int[zSize][xSize][ySize];
+				
+		floor_colors = new HashMap<Integer, Integer>(Map.of(
+			0, Colors.packJagexHsl(config.floor12hue(), config.floor12saturation(), config.floor12brightness()),
+			1, Colors.packJagexHsl(config.floor12hue(), config.floor12saturation(), config.floor12brightness()),
+			2, Colors.packJagexHsl(config.floor12hue(), config.floor12saturation(), config.floor12brightness()),
+			3, Colors.packJagexHsl(config.floor34hue(), config.floor34saturation(), config.floor34brightness()),
+			4, Colors.packJagexHsl(config.floor34hue(), config.floor34saturation(), config.floor34brightness()),
+			5, Colors.packJagexHsl(config.floor5hue(), config.floor5saturation(), config.floor5brightness())
+		));
+		
+		findFloor(regions);
+		if (current_floor == -1) return; /* don't run when no sepulchre regions are loaded */
+		
+		findObjectCounts();
+		setLightnessArray();
+		blendLightnessArray();
+		paintTiles();
+		hideGroundObjects();
+	}
+	
 	@Subscribe
 	public void onConfigChanged(ConfigChanged event) {
 		/* reload game upon config change */
 		if(event.getGroup().equals("Sepulchre Low Detail")) {
-			clientThread.invokeLater(() -> {
-				if (client.getGameState() == GameState.LOGGED_IN) {
-					client.setGameState(GameState.LOADING);
-				}
-			});
+			reloadMap();
 		}
 	}
 	

@@ -1,4 +1,4 @@
-package me.tenai;
+package me.tenai.sepulchrelowdetail;
 
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;

@@ -1,10 +1,10 @@
-package me.tenai;
+package me.tenai.sepulchrelowdetail;
 
-import me.tenai.SepulchreLowDetailPlugin;
+import me.tenai.sepulchrelowdetail.SepulchreLowDetailPlugin;
 import net.runelite.client.RuneLite;
 import net.runelite.client.externalplugins.ExternalPluginManager;
 
-public class SepulchreLowDetailTest
+public class SepulchreLowDetailPluginTest
 {
 	public static void main(String[] args) throws Exception
 	{
