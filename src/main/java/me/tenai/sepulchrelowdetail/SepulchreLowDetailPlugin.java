@@ -127,7 +127,8 @@ public class SepulchreLowDetailPlugin extends Plugin
 		int lightness = Colors.unpackJagexLightness(color);
 		
 		lightness -= config.brightnessDifference();
-		lightness = Math.clamp(lightness, Colors.MIN_LIGHTNESS, Colors.MAX_LIGHTNESS);
+		if(lightness > Colors.MAX_LIGHTNESS) lightness = Colors.MAX_LIGHTNESS;
+		if(lightness < Colors.MIN_LIGHTNESS) lightness = Colors.MIN_LIGHTNESS;
 		
 		return Colors.packJagexHsl(hue, saturation, lightness);
 	}
