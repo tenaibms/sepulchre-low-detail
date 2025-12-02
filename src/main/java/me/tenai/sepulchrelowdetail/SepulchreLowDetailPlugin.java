@@ -136,7 +136,7 @@ public class SepulchreLowDetailPlugin extends Plugin
 	private void findFloor(int[] regions) {
 		current_floor = -1;
 		for(var region : regions) {
-			if(floor_regions.containsKey(region)) { current_floor = floor_regions.get(region); log.info("Current Floor: {}", current_floor); }
+			if(floor_regions.containsKey(region)) { current_floor = floor_regions.get(region); log.debug("Current Floor: {}", current_floor); }
 		}
 	}
 	
